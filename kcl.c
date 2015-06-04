@@ -67,7 +67,7 @@ void ATI_API_CALL KCL_Init_Suspend_Console(void)
 
 int  ATI_API_CALL KCL_Request_Firmware(KCL_FIRMWARE *pFirmware)
 {
-    struct firmware *pfw = NULL;
+    const struct firmware *pfw = NULL;
     struct device *pdev = NULL;
     struct pci_dev *pdev_pci = NULL;
     

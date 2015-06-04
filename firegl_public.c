@@ -93,7 +93,7 @@
    and they use different config options. These options can only be enabled
    on x86_64 with newer 2.6 kernels (2.6.23 for intel, 2.6.26 for amd). 
 */
-#if defined(CONFIG_AMD_IOMMU) || defined(CONFIG_DMAR)
+#if defined(CONFIG_AMD_IOMMU) || defined(CONFIG_INTEL_IOMMU) || defined(CONFIG_DMAR)
     #define FIREGL_DMA_REMAPPING
 #endif
 
@@ -3468,7 +3468,11 @@ int ATI_API_CALL KCL_InstallInterruptHandler(
 #else
         //when MSI enabled. keep irq disabled when calling the action handler,
         //exclude this IRQ from irq balancing (only on one CPU) 
-        ((useMSI) ? (IRQF_DISABLED | IRQF_NOBALANCING) : (IRQF_SHARED)),    
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
+        ((useMSI) ? (IRQF_DISABLED | IRQF_NOBALANCING) : (IRQF_SHARED)),
+#else
+        ((useMSI) ? (IRQF_NOBALANCING) : (IRQF_SHARED)),
+#endif
 #endif
         dev_name,
         context);
@@ -4468,8 +4472,13 @@ static void kcl_mem_pat_setup (void *info)
 
     if (cpu_has_pge)
     {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
         cr4 = read_cr4();
         write_cr4(cr4 & ~X86_CR4_PGE);
+#else
+	cr4 = __read_cr4();
+	__write_cr4(cr4 & ~X86_CR4_PGE);
+#endif
     }
      __flush_tlb();
 
@@ -4482,7 +4491,11 @@ static void kcl_mem_pat_setup (void *info)
     write_cr0(cr0 & 0xbfffffff);
     if (cpu_has_pge)
     {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
         write_cr4(cr4);
+#else
+	__write_cr4(cr4);
+#endif
     }
     local_irq_restore(flags);
 
@@ -4509,8 +4522,13 @@ static void kcl_mem_pat_restore (void *info)
 
     if (cpu_has_pge)
     {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
         cr4 = read_cr4();
         write_cr4(cr4 & ~X86_CR4_PGE);
+#else
+	cr4 = __read_cr4();
+	__write_cr4(cr4 & ~X86_CR4_PGE);
+#endif
     }
      __flush_tlb();
   
@@ -4522,7 +4540,11 @@ static void kcl_mem_pat_restore (void *info)
     write_cr0(cr0 & 0xbfffffff);
     if (cpu_has_pge)
     {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
         write_cr4(cr4);
+#else
+	__write_cr4(cr4);
+#endif
     }
     local_irq_restore(flags);
 
@@ -4816,8 +4838,13 @@ static unsigned long kasSetExecutionLevel(unsigned long level)
 {
     unsigned long orig_level;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
+    orig_level = __this_cpu_read(kasExecutionLevel);
+    __this_cpu_write(kasExecutionLevel, level);
+#else
     orig_level = __get_cpu_var(kasExecutionLevel);
     __get_cpu_var(kasExecutionLevel) = level;
+#endif
 
     return orig_level;
 }
@@ -4829,7 +4856,11 @@ static unsigned long kasSetExecutionLevel(unsigned long level)
  */
 static unsigned long kas_GetExecutionLevel(void)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
+    return __this_cpu_read(kasExecutionLevel);
+#else
     return __get_cpu_var(kasExecutionLevel);
+#endif
 }
 
 /** \brief Type definition for kas_spin_lock() parameter */
@@ -6392,7 +6423,7 @@ void ATI_API_CALL KCL_create_uuid(void *buf)
     generate_random_uuid((char *)buf);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,15,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,15,0) && LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
 static int KCL_fpu_save_init(struct task_struct *tsk)
 {
    struct fpu *fpu = &tsk->thread.fpu;
@@ -6431,7 +6462,7 @@ void ATI_API_CALL KCL_fpu_begin(void)
     struct task_struct *cur_task = get_current();
     preempt_disable();
     if (cur_thread->status & TS_USEDFPU)
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,15,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,15,0) && LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
          KCL_fpu_save_init(cur_task);
 #else
          __save_init_fpu(cur_task);
@@ -6453,7 +6484,7 @@ void ATI_API_CALL KCL_fpu_begin(void)
 #else
     if (cur_task->thread.has_fpu)
 #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,15,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,15,0) && LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
         KCL_fpu_save_init(cur_task);
 #else
         __save_init_fpu(cur_task);
